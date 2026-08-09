@@ -162,23 +162,23 @@ def health_check():
 @app.route('/app')
 @app.route('/app/')
 def flutter_app():
-    flutter_index = Path('static/flutter_web/index.html')
+    flutter_index = Path(app.static_folder) / 'flutter_web' / 'index.html'
     if flutter_index.exists():
-        return send_from_directory('static/flutter_web', 'index.html')
+        return send_from_directory(Path(app.static_folder) / 'flutter_web', 'index.html')
     return jsonify({'message': 'Flutter web not deployed on this server. Use the mobile app.'}), 200
 
 @app.route('/app/<path:path>')
 def flutter_app_files(path):
-    flutter_file = Path(f'static/flutter_web/{path}')
+    flutter_file = Path(app.static_folder) / 'flutter_web' / path
     if flutter_file.exists():
-        return send_from_directory('static/flutter_web', path)
+        return send_from_directory(Path(app.static_folder) / 'flutter_web', path)
     return jsonify({'error': 'Not found'}), 404
 
 @app.route('/download-app')
 def download_app():
-    apk_path = Path('static/downloads/nexqa-app.apk')
+    apk_path = Path(app.static_folder) / 'downloads' / 'nexqa-app.apk'
     if apk_path.exists():
-        return send_from_directory('static/downloads', 'nexqa-app.apk', as_attachment=True)
+        return send_from_directory(Path(app.static_folder) / 'downloads', 'nexqa-app.apk', as_attachment=True)
     return jsonify({'message': 'APK not available on this server.'}), 404
 
 # ── المصادقة ──────────────────────────────────────────────────────────
