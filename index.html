@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Clock - Multiple Time Zones</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>World Clock</h1>
+        <div class="clocks-grid">
+            <div class="clock-card">
+                <div class="timezone-name">New York</div>
+                <div class="timezone-label">America/New_York</div>
+                <div class="digital-clock" id="clock-ny">00:00:00</div>
+                <div class="date" id="date-ny"></div>
+            </div>
+
+            <div class="clock-card">
+                <div class="timezone-name">London</div>
+                <div class="timezone-label">Europe/London</div>
+                <div class="digital-clock" id="clock-london">00:00:00</div>
+                <div class="date" id="date-london"></div>
+            </div>
+
+            <div class="clock-card">
+                <div class="timezone-name">Cairo</div>
+                <div class="timezone-label">Africa/Cairo</div>
+                <div class="digital-clock" id="clock-cairo">00:00:00</div>
+                <div class="date" id="date-cairo"></div>
+            </div>
+
+            <div class="clock-card">
+                <div class="timezone-name">Dubai</div>
+                <div class="timezone-label">Asia/Dubai</div>
+                <div class="digital-clock" id="clock-dubai">00:00:00</div>
+                <div class="date" id="date-dubai"></div>
+            </div>
+
+            <div class="clock-card">
+                <div class="timezone-name">Tokyo</div>
+                <div class="timezone-label">Asia/Tokyo</div>
+                <div class="digital-clock" id="clock-tokyo">00:00:00</div>
+                <div class="date" id="date-tokyo"></div>
+            </div>
+
+            <div class="clock-card">
+                <div class="timezone-name">Sydney</div>
+                <div class="timezone-label">Australia/Sydney</div>
+                <div class="digital-clock" id="clock-sydney">00:00:00</div>
+                <div class="date" id="date-sydney"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="addTimezoneBtn" class="btn">+ Add Timezone</button>
+            <button id="resetBtn" class="btn btn-secondary">Reset to Default</button>
+        </div>
+
+        <div id="customTimezonesContainer" class="custom-timezones"></div>
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add Custom Timezone</h2>
+            <input type="text" id="timezoneInput" placeholder="e.g., Europe/Paris, Asia/Bangkok">
+            <button id="addBtn" class="btn">Add</button>
+            <div id="errorMessage" class="error-message"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
