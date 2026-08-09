@@ -4,9 +4,13 @@ import base64
 import json
 import datetime
 
-# Fix Unicode/Emoji encoding on Windows terminals
-if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+# Fix Unicode/Emoji encoding on Windows terminals safely
+try:
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
 import requests
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
@@ -19,11 +23,11 @@ from dotenv import load_dotenv
 
 # --- CONFIGURATION ---
 load_dotenv()
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
 
 # استخدام PostgreSQL على Railway أو SQLite محلياً
-_db_url = os.getenv('DATABASE_URL', 'sqlite:///wood_defects.db')
+_db_url = os.getenv('DATABASE_URL') or 'sqlite:///wood_defects.db'
 # Railway بيرجع postgres:// لكن SQLAlchemy بيحتاج postgresql://
 if _db_url.startswith('postgres://'):
     _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
@@ -66,10 +70,27 @@ _gemini_model = None
 def get_model():
     global _model
     if _model is None:
+        model_path = 'best (1).pt'
+        # ── تحميل الموديل من URL إذا لم يكن موجوداً محلياً ──────────────
+        if not os.path.exists(model_path):
+            model_url = os.getenv('MODEL_URL', '')
+            if model_url:
+                import urllib.request
+                print(f"⬇️ Downloading model from URL...")
+                try:
+                    urllib.request.urlretrieve(model_url, model_path)
+                    print(f"✅ Model downloaded successfully.")
+                except Exception as e:
+                    print(f"❌ Failed to download model: {e}")
+                    raise RuntimeError(f"Model file not found and download failed: {e}")
+            else:
+                raise FileNotFoundError(
+                    "Model file 'best (1).pt' not found. "
+                    "Set MODEL_URL environment variable with the model download URL."
+                )
         print("⏳ Loading YOLO model...")
         from ultralytics import YOLO
-        # Using the fine-tuned wood model (50 epochs)
-        _model = YOLO('best (1).pt')
+        _model = YOLO(model_path)
         print("✅ YOLO Model Loaded Successfully.")
     return _model
 
@@ -118,20 +139,47 @@ with app.app_context():
 # --- ROUTES ---
 @app.route('/')
 def index():
-    return render_template('landing.html')
+    try:
+        return render_template('landing.html')
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "error": "Internal Server Error during template rendering",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Keep-alive endpoint — يُستخدم لمنع Railway من إيقاف الـ container"""
+    return jsonify({
+        "status": "ok",
+        "version": "2.1",
+        "model_loaded": _model is not None,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+    }), 200
 
 @app.route('/app')
 @app.route('/app/')
 def flutter_app():
-    return send_from_directory('static/flutter_web', 'index.html')
+    flutter_index = Path('static/flutter_web/index.html')
+    if flutter_index.exists():
+        return send_from_directory('static/flutter_web', 'index.html')
+    return jsonify({'message': 'Flutter web not deployed on this server. Use the mobile app.'}), 200
 
 @app.route('/app/<path:path>')
 def flutter_app_files(path):
-    return send_from_directory('static/flutter_web', path)
+    flutter_file = Path(f'static/flutter_web/{path}')
+    if flutter_file.exists():
+        return send_from_directory('static/flutter_web', path)
+    return jsonify({'error': 'Not found'}), 404
 
 @app.route('/download-app')
 def download_app():
-    return send_from_directory('static/downloads', 'nexqa-app.apk', as_attachment=True)
+    apk_path = Path('static/downloads/nexqa-app.apk')
+    if apk_path.exists():
+        return send_from_directory('static/downloads', 'nexqa-app.apk', as_attachment=True)
+    return jsonify({'message': 'APK not available on this server.'}), 404
 
 # ── المصادقة ──────────────────────────────────────────────────────────
 import hashlib
