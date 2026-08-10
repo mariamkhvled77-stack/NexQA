@@ -1,32 +1,24 @@
-# Use Python 3.10 slim base
+# Use an official Python runtime as a parent image
 FROM python:3.10-slim
 
 # Install system dependencies for OpenCV and YOLOv8
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy requirements first (layer caching)
-COPY requirements.txt .
+# Copy the current directory contents into the container at /app
+COPY . /app
 
-# Install Python dependencies
+# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files
-COPY . .
+# Make port 5000 available to the world outside this container
+EXPOSE 5000
 
-# Create uploads directory
-RUN mkdir -p static/uploads
-
-# Railway injects $PORT automatically — expose it
-EXPOSE $PORT
-
-# Use gunicorn with Railway's dynamic $PORT
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 app:app
+# Run gunicorn when the container launches
+# Railway will provide the PORT environment variable
+CMD gunicorn --bind 0.0.0.0:${PORT:-5000} app:app
