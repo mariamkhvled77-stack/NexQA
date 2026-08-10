@@ -317,88 +317,96 @@ def api_predict():
     img_path = Path(UPLOAD_FOLDER) / f"mob_{file.filename}"
     file.save(img_path)
     
-    # ---------------------------------------------------------
-    # LOCAL YOLO MODEL DETECTION
     try:
-        model = get_model()
-        results = model(str(img_path))
-    except Exception as e:
-        print("Model Error:", str(e))
-        return jsonify({"success": False, "message": f"Model Error: {str(e)}"}), 500
+        # ---------------------------------------------------------
+        # LOCAL YOLO MODEL DETECTION
+        try:
+            model = get_model()
+            results = model(str(img_path))
+        except Exception as e:
+            print("Model Error:", str(e))
+            return jsonify({"success": False, "message": f"Model Loading/Inference Error: {str(e)}"}), 200
 
-    expert_report = []
-    import cv2
-    import numpy as np
-    
-    # Load image for drawing boxes
-    processed_img = cv2.imread(str(img_path))
-    
-    result = results[0]
-    boxes = result.boxes
-    
-    for i in range(len(boxes)):
-        box = boxes[i]
-        class_id = int(box.cls[0].item())
-        class_name_en = model.names[class_id].lower()
-        confidence = float(box.conf[0].item())
+        expert_report = []
+        import cv2
+        import numpy as np
         
-        # جلب التحليل الهندسي المبرمج مسبقاً
-        info = WOOD_DEFECTS_EXPERT_DB.get(class_name_en, {
-            "name": class_name_en,
-            "desc": "عيب تم اكتشافه بواسطة نظام الرؤية الاصطناعية المخصص.",
-            "impact": "قد يؤثر على جودة وتصنيف اللوح."
-        })
+        # Load image for drawing boxes
+        processed_img = cv2.imread(str(img_path))
+        if processed_img is None:
+            return jsonify({"success": False, "message": f"OpenCV could not read image at {img_path}"}), 200
         
-        if info["name"] not in [e["name"] for e in expert_report]:
-            expert_report.append({
-                "name": info["name"],
-                "description": info["desc"],
-                "impact": info["impact"],
-                "confidence": confidence
+        result = results[0]
+        boxes = result.boxes
+        
+        for i in range(len(boxes)):
+            box = boxes[i]
+            class_id = int(box.cls[0].item())
+            class_name_en = model.names[class_id].lower()
+            confidence = float(box.conf[0].item())
+            
+            # جلب التحليل الهندسي المبرمج مسبقاً
+            info = WOOD_DEFECTS_EXPERT_DB.get(class_name_en, {
+                "name": class_name_en,
+                "desc": "عيب تم اكتشافه بواسطة نظام الرؤية الاصطناعية المخصص.",
+                "impact": "قد يؤثر على جودة وتصنيف اللوح."
             })
-        
-        # رسم المربعات حول العيوب (Draw bounding boxes)
-        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        
-        cv2.rectangle(processed_img, (x1, y1), (x2, y2), (0, 0, 255), 3) # مربع أحمر
-        label = f"{class_name_en.title()} {confidence:.2f}"
-        
-        # وضع خلفية للنص ليكون واضحاً
-        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-        cv2.rectangle(processed_img, (x1, y1 - 25), (x1 + tw, y1), (0, 0, 255), -1)
-        cv2.putText(processed_img, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            if info["name"] not in [e["name"] for e in expert_report]:
+                expert_report.append({
+                    "name": info["name"],
+                    "description": info["desc"],
+                    "impact": info["impact"],
+                    "confidence": confidence
+                })
+            
+            # رسم المربعات حول العيوب (Draw bounding boxes)
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            
+            cv2.rectangle(processed_img, (x1, y1), (x2, y2), (0, 0, 255), 3) # مربع أحمر
+            label = f"{class_name_en.title()} {confidence:.2f}"
+            
+            # وضع خلفية للنص ليكون واضحاً
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(processed_img, (x1, y1 - 25), (x1 + tw, y1), (0, 0, 255), -1)
+            cv2.putText(processed_img, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-    # إذا لم يجد الموديل أي عيب
-    if not expert_report:
-        final_status = "passed"
-        expert_report = [{
-            "name": "سليم (لا يوجد عيوب)",
-            "description": "الموديل الاحترافي لم يكتشف أي شقوق، عقد ميتة، تعفن، أو تشوهات في هذه المنطقة.",
-            "impact": "اللوح سليم بنسبة 100% وجاهز للاستخدام في أدق الصناعات الخشبية دون أي معالجة إضافية.",
-            "confidence": 1.0
-        }]
-    else:
-        final_status = "rejected"
-    
-    # تحويل الصورة إلى base64 لإرسالها للتطبيق
-    _, buffer = cv2.imencode('.jpg', processed_img)
-    encoded_string = base64.b64encode(buffer).decode('utf-8')
-    
-    record_id = f"#{db.session.query(ProductRecord).count() + 1}"
-    new_record = ProductRecord(
-        id=record_id, image_base64=encoded_string, status=final_status,
-        confidence=expert_report[0]['confidence'], defect_type=expert_report[0]['name'],
-        buyer="NexQA Final Verified Station", shipping="Air Cargo",
-        inspected_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    )
-    db.session.add(new_record)
-    db.session.commit()
+        # إذا لم يجد الموديل أي عيب
+        if not expert_report:
+            final_status = "passed"
+            expert_report = [{
+                "name": "سليم (لا يوجد عيوب)",
+                "description": "الموديل الاحترافي لم يكتشف أي شقوق، عقد ميتة، تعفن، أو تشوهات في هذه المنطقة.",
+                "impact": "اللوح سليم بنسبة 100% وجاهز للاستخدام في أدق الصناعات الخشبية دون أي معالجة إضافية.",
+                "confidence": 1.0
+            }]
+        else:
+            final_status = "rejected"
+        
+        # تحويل الصورة إلى base64 لإرسالها للتطبيق
+        _, buffer = cv2.imencode('.jpg', processed_img)
+        encoded_string = base64.b64encode(buffer).decode('utf-8')
+        
+        record_id = f"#{db.session.query(ProductRecord).count() + 1}"
+        new_record = ProductRecord(
+            id=record_id, image_base64=encoded_string, status=final_status,
+            confidence=expert_report[0]['confidence'], defect_type=expert_report[0]['name'],
+            buyer="NexQA Final Verified Station", shipping="Air Cargo",
+            inspected_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        db.session.add(new_record)
+        db.session.commit()
 
-    return jsonify({
-        "success": True, "status": final_status, "data": expert_report,
-        "image_base64": encoded_string, "id": record_id,
-        "buyer": new_record.buyer, "shipping": new_record.shipping
-    })
+        return jsonify({
+            "success": True, "status": final_status, "data": expert_report,
+            "image_base64": encoded_string, "id": record_id,
+            "buyer": new_record.buyer, "shipping": new_record.shipping
+        })
+    except Exception as full_e:
+        import traceback
+        trace = traceback.format_exc()
+        print("Full predict error:", trace)
+        return jsonify({"success": False, "message": f"Server Logic Error: {str(full_e)}"}), 200
 
 @app.route('/api/history', methods=['GET'])
 def api_history():
