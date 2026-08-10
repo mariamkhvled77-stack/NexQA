@@ -140,26 +140,28 @@ with app.app_context():
 @app.route('/')
 def index():
     import os
-    # استخدام مسار مطلق لضمان إيجاد landing.html في أي بيئة تشغيل
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    landing_path = os.path.join(base_dir, 'templates', 'landing.html')
-    if os.path.exists(landing_path):
-        with open(landing_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
-    # Fallback: حاول render_template العادي
+    # ابحث عن landing.html في عدة مواقع محتملة
+    candidates = [
+        os.path.join(base_dir, 'templates', 'landing.html'),  # المسار الصحيح
+        os.path.join(base_dir, 'landing.html'),               # في حالة رُفع في الجذر
+        '/app/templates/landing.html',
+        '/app/landing.html',
+    ]
+    for landing_path in candidates:
+        if os.path.exists(landing_path):
+            with open(landing_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    # Fallback
     try:
         return render_template('landing.html')
     except Exception as e:
         import traceback
         return jsonify({
-            "error": "landing.html not found",
-            "base_dir": base_dir,
-            "landing_path": landing_path,
-            "exists": os.path.exists(landing_path),
-            "templates_dir_exists": os.path.exists(os.path.join(base_dir, 'templates')),
+            "error": "landing.html not found in any location",
+            "searched": candidates,
             "message": str(e),
-            "traceback": traceback.format_exc()
         }), 500
 
 @app.route('/api/health', methods=['GET'])
