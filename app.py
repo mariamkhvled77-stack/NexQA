@@ -70,24 +70,31 @@ _gemini_model = None
 def get_model():
     global _model
     if _model is None:
-        model_path = 'best (1).pt'
+        # استخدام مسار مطلق لضمان إيجاد الموديل في أي بيئة تشغيل
+        _base = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(_base, 'best (1).pt')
         # ── تحميل الموديل من URL إذا لم يكن موجوداً محلياً ──────────────
         if not os.path.exists(model_path):
-            model_url = os.getenv('MODEL_URL', '')
-            if model_url:
-                import urllib.request
-                print(f"⬇️ Downloading model from URL...")
-                try:
-                    urllib.request.urlretrieve(model_url, model_path)
-                    print(f"✅ Model downloaded successfully.")
-                except Exception as e:
-                    print(f"❌ Failed to download model: {e}")
-                    raise RuntimeError(f"Model file not found and download failed: {e}")
+            # جرب المسار النسبي كاحتياط
+            model_path_rel = 'best (1).pt'
+            if os.path.exists(model_path_rel):
+                model_path = model_path_rel
             else:
-                raise FileNotFoundError(
-                    "Model file 'best (1).pt' not found. "
-                    "Set MODEL_URL environment variable with the model download URL."
-                )
+                model_url = os.getenv('MODEL_URL', '')
+                if model_url:
+                    import urllib.request
+                    print(f"⬇️ Downloading model from URL...")
+                    try:
+                        urllib.request.urlretrieve(model_url, model_path)
+                        print(f"✅ Model downloaded successfully.")
+                    except Exception as e:
+                        print(f"❌ Failed to download model: {e}")
+                        raise RuntimeError(f"Model file not found and download failed: {e}")
+                else:
+                    raise FileNotFoundError(
+                        f"Model file not found at {model_path}. "
+                        "Set MODEL_URL environment variable with the model download URL."
+                    )
         print("⏳ Loading YOLO model...")
         from ultralytics import YOLO
         _model = YOLO(model_path)
