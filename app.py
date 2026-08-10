@@ -201,7 +201,9 @@ def download_app():
     apk_path = Path(app.static_folder) / 'downloads' / 'nexqa-app.apk'
     if apk_path.exists():
         return send_from_directory(Path(app.static_folder) / 'downloads', 'nexqa-app.apk', as_attachment=True)
-    return jsonify({'message': 'APK not available on this server.'}), 404
+    # استخدام رابط APK من متغير بيئة أو الرابط الثابت من GitHub Releases
+    apk_url = os.getenv('APK_URL', 'https://github.com/mariamkhvled77-stack/NexQA/releases/download/v1/nexqa-app.apk')
+    return redirect(apk_url)
 
 # ── المصادقة ──────────────────────────────────────────────────────────
 import hashlib
