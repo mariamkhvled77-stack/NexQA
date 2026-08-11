@@ -1,0 +1,18 @@
+[phases.setup]
+aptPkgs = [
+  "libgl1",
+  "libglib2.0-0",
+  "libsm6",
+  "libxrender1",
+  "libxext6",
+  "libxcb1",
+  "libx11-6",
+  "ffmpeg"
+]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "pip uninstall -y opencv-python || true",
+  "pip install opencv-python-headless --force-reinstall --quiet"
+]
