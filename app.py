@@ -334,30 +334,30 @@ def api_predict():
             return jsonify({"success": False, "message": f"Model Loading/Inference Error: {str(e)}"}), 200
 
         expert_report = []
-        import cv2
-        import numpy as np
-        
-        # Load image for drawing boxes
-        processed_img = cv2.imread(str(img_path))
-        if processed_img is None:
-            return jsonify({"success": False, "message": f"OpenCV could not read image at {img_path}"}), 200
-        
+
+        # ── رسم الـ bounding boxes باستخدام PIL (بدلاً من cv2 لتجنب مشكلة libxcb على Railway) ──
+        from PIL import Image as _PILImg, ImageDraw as _PILDraw, ImageFont as _PILFont
+        import io
+
+        pil_img = _PILImg.open(str(img_path)).convert("RGB")
+        draw = _PILDraw.Draw(pil_img)
+
         result = results[0]
         boxes = result.boxes
-        
+
         for i in range(len(boxes)):
             box = boxes[i]
             class_id = int(box.cls[0].item())
             class_name_en = model.names[class_id].lower()
             confidence = float(box.conf[0].item())
-            
+
             # جلب التحليل الهندسي المبرمج مسبقاً
             info = WOOD_DEFECTS_EXPERT_DB.get(class_name_en, {
                 "name": class_name_en,
                 "desc": "عيب تم اكتشافه بواسطة نظام الرؤية الاصطناعية المخصص.",
                 "impact": "قد يؤثر على جودة وتصنيف اللوح."
             })
-            
+
             if info["name"] not in [e["name"] for e in expert_report]:
                 expert_report.append({
                     "name": info["name"],
@@ -365,17 +365,17 @@ def api_predict():
                     "impact": info["impact"],
                     "confidence": confidence
                 })
-            
-            # رسم المربعات حول العيوب (Draw bounding boxes)
+
+            # رسم المربع الأحمر حول العيب باستخدام PIL
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-            
-            cv2.rectangle(processed_img, (x1, y1), (x2, y2), (0, 0, 255), 3) # مربع أحمر
-            label = f"{class_name_en.title()} {confidence:.2f}"
-            
-            # وضع خلفية للنص ليكون واضحاً
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            cv2.rectangle(processed_img, (x1, y1 - 25), (x1 + tw, y1), (0, 0, 255), -1)
-            cv2.putText(processed_img, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            draw.rectangle([x1, y1, x2, y2], outline=(255, 50, 50), width=3)
+
+            # رسم تسمية العيب
+            label = f"{class_name_en.title()} {confidence:.0%}"
+            # خلفية للنص
+            label_bbox = draw.textbbox((x1, y1 - 22), label)
+            draw.rectangle(label_bbox, fill=(255, 50, 50))
+            draw.text((x1, y1 - 22), label, fill=(255, 255, 255))
 
         # إذا لم يجد الموديل أي عيب
         if not expert_report:
@@ -388,11 +388,12 @@ def api_predict():
             }]
         else:
             final_status = "rejected"
-        
-        # تحويل الصورة إلى base64 لإرسالها للتطبيق
-        _, buffer = cv2.imencode('.jpg', processed_img)
-        encoded_string = base64.b64encode(buffer).decode('utf-8')
-        
+
+        # تحويل الصورة إلى base64 لإرسالها للفرونت إند (PIL بدلاً من cv2)
+        buf = io.BytesIO()
+        pil_img.save(buf, format="JPEG", quality=88)
+        encoded_string = base64.b64encode(buf.getvalue()).decode("utf-8")
+
         record_id = f"#{db.session.query(ProductRecord).count() + 1}"
         new_record = ProductRecord(
             id=record_id, image_base64=encoded_string, status=final_status,
