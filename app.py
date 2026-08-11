@@ -4,6 +4,12 @@ import base64
 import json
 import datetime
 
+# ── إجبار OpenCV/ultralytics على وضع headless (بدون شاشة) على Railway ──
+os.environ.setdefault("DISPLAY", "")
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("MPLBACKEND", "Agg")
+os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "0")
+
 # Fix Unicode/Emoji encoding on Windows terminals safely
 try:
     if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
